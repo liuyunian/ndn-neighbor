@@ -5,14 +5,14 @@
 
 class Client{
 public:
-    Client(const char * interface, const uint8_t * localMacAddr);
+    Client(const std::string & interface, const uint8_t * localMacAddr);
     ~Client();
 
     void sendMulticastFrame();
     void sendUnicastFrame(const u_int8_t * distAddr);
 
 private:
-    const char * m_interface;
+    std::string m_interface;
     const uint8_t * m_localMacAddr;
 };
 

@@ -6,7 +6,7 @@
 
 class Server{
 public:
-    Server(char * interface, const u_int8_t * localMacAddr);
+    Server(const std::string & interface, const u_int8_t * localMacAddr);
     ~Server();
 
     void run();
@@ -21,9 +21,8 @@ private:
     void createFace(const u_int8_t * macAddr) const;
 
 private:
-    char * m_interface;
+    std::string m_interface;
     const uint8_t * m_localMacAddr;
-    // int m_dataLinkType; // 数据链路的类型,比如以太网,无线局域网
     pcap_t * m_pcap;
 
     mutable std::vector<const uint8_t *> m_addrStore;
