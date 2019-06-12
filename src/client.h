@@ -1,7 +1,7 @@
 #ifndef CLIENT_H_
 #define CLIENT_H_
 
-#include<iostream>
+#include<string>
 
 class Client{
 public:
@@ -9,11 +9,15 @@ public:
     ~Client();
 
     void sendMulticastFrame();
-    void sendUnicastFrame(const u_int8_t * distAddr);
+    void sendAckFrame(const u_int8_t * distAddr);
+
+private:
+    int sendFrame(const u_int8_t * distAddr, const std::string & content);
 
 private:
     std::string m_interface;
     const uint8_t * m_localMacAddr;
+    std::string m_prefix;
 };
 
 #endif

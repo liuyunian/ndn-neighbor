@@ -3,6 +3,7 @@
 
 #include <pcap/pcap.h>
 #include <vector>
+#include <memory>
 
 class Server{
 public:
@@ -10,6 +11,8 @@ public:
     ~Server();
 
     void run();
+
+    void stop();
 
 private:
     void handlePacket(const pcap_pkthdr *pkthdr, const uint8_t * payload) const;
@@ -25,6 +28,7 @@ private:
     const uint8_t * m_localMacAddr;
     pcap_t * m_pcap;
 
+public:
     mutable std::vector<const uint8_t *> m_addrStore;
 };
 

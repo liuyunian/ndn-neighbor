@@ -1,16 +1,18 @@
 #include <iostream>
 #include <net/ethernet.h>
+
 #include "server.h"
 #include "client.h"
 
 
 Server::Server(const std::string & interface, const u_int8_t * localMacAddr): 
-    m_pcap(nullptr),
     m_interface(interface),
-    m_localMacAddr(localMacAddr){}
+    m_localMacAddr(localMacAddr),
+    m_pcap(nullptr){}
 
 Server::~Server(){
-    if (m_pcap){
+    std::cout << "pcap_close" << std::endl;
+    if (m_pcap != NULL){
         pcap_close(m_pcap); 
     }
 }
@@ -51,35 +53,41 @@ void Server::run(){
     }
 }
 
+void Server::stop(){
+    pcap_breakloop(m_pcap);
+    pcap_close(m_pcap);
+    m_pcap = NULL;
+    std::cout << "INFO: Server for " << m_interface << " stop listening" << std::endl;
+}
+
 void Server::handlePacket(const pcap_pkthdr * pkthdr, const uint8_t * payload) const {
     if(pkthdr->caplen == 0){ //捕获包的长度
-        // std::cerr << "ERROR: Invalid header: caplen=0" << std::endl;
         return;
     }
 
     if(pkthdr->len == 0){ //包应该的长度
-        // std::cerr << "ERROR: Invalid header: len=0" << std::endl;
         return;
     }
     else if(pkthdr->len < pkthdr->caplen){
-        // std::cerr << "ERROR: Invalid header: len(" << pkthdr->len << ") < caplen(" << pkthdr->caplen << ")" << std::endl;
         return;
     }
     else if (pkthdr->len < ETH_HLEN){
-        // std::cerr << "ERROR: Truncated Ethernet frame, length " << pkthdr->len << std::endl;
         return;
     }
 
     auto ether = reinterpret_cast<const ether_header *>(payload);
+    const u_int8_t * destAddr = ether->ether_dhost;
+    const u_int8_t * srcAddr = ether->ether_shost;
 
-    if(isEqual(ether->ether_shost, m_localMacAddr)){
-        std::cerr << "WARNNING: Server for "<< m_interface << " reveive frame sent by self" << std::endl;
+    payload += 14;
+    std::string content(reinterpret_cast<const char*>(payload));
+
+    if(isEqual(srcAddr, m_localMacAddr)){
+        // std::cerr << "WARNNING: Server for "<< m_interface << " reveive frame sent by self" << std::endl;
         return;
     }
 
-    const u_int8_t * distAddr = ether->ether_dhost;
-    const u_int8_t * srcAddr = ether->ether_shost;
-    if(isMulticast(distAddr)){
+    if(isMulticast(destAddr)){
         std::cout << "INFO: Server for "<< m_interface << " reveive a multicast frame" << std::endl;
 
         if(!m_addrStore.empty()){
@@ -100,12 +108,11 @@ void Server::handlePacket(const pcap_pkthdr * pkthdr, const uint8_t * payload) c
             createFace(srcAddr);
         }
 
-        // TODO: send ack frame
         Client client(m_interface, m_localMacAddr);
-        client.sendUnicastFrame(srcAddr);
+        client.sendAckFrame(srcAddr);
     }
-    else if(isSenttoMe(distAddr)){
-        std::cout << "INFO: Server for "<< m_interface << " reveive a unicast frame" << std::endl;
+    else if(isSenttoMe(destAddr)){
+        std::cout << "INFO: Server for "<< m_interface << " reveive a Ack frame" << std::endl;
 
         if(!m_addrStore.empty()){
             bool isContain = false;
@@ -130,13 +137,13 @@ void Server::handlePacket(const pcap_pkthdr * pkthdr, const uint8_t * payload) c
     }
 }
 
-bool Server::isMulticast(const uint8_t * distAddr) const {
+bool Server::isMulticast(const uint8_t * destAddr) const {
     const uint8_t multicastAddr[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
-    return isEqual(distAddr, multicastAddr);
+    return isEqual(destAddr, multicastAddr);
 }
 
-bool Server::isSenttoMe(const uint8_t * distAddr) const {
-    return isEqual(distAddr, m_localMacAddr);
+bool Server::isSenttoMe(const uint8_t * destAddr) const {
+    return isEqual(destAddr, m_localMacAddr);
 }
 
 bool Server::isEqual(const uint8_t * addr1, const uint8_t * addr2) const {
