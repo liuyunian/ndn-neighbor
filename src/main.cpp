@@ -1,15 +1,17 @@
 #include <iostream>
-#include <net/if.h>
-#include <cstring>
-#include <sys/ioctl.h>
 #include <thread>
+#include <mutex>
 #include <map>
 #include <set>
+#include <vector>
+
+#include <net/if.h>
+#include <string.h>
+#include <sys/ioctl.h>
 
 #include "server.h"
-#include "client.h"
 
-std::map<std::string, uint8_t *> interfaceStore;
+std::map<std::string, const uint8_t *> interfaceStore;
 
 static void
 getInterfaceMacAddr(std::string interface, uint8_t * macAddr){
@@ -19,7 +21,7 @@ getInterfaceMacAddr(std::string interface, uint8_t * macAddr){
     ioctl(sock, SIOCGIFHWADDR, &ifreq);
 
     for(int i = 0; i < 6; ++ i){
-        macAddr[i] = static_cast<u_int8_t>(ifreq.ifr_hwaddr.sa_data[i]);
+        macAddr[i] = static_cast<uint8_t>(ifreq.ifr_hwaddr.sa_data[i]);
     }
 }
 
@@ -90,18 +92,6 @@ listenChangeForInterface(std::string & interfaceName){
     return 0;
 }
 
-static void
-destroyFace(const u_int8_t * macAddr){
-    std::string cmd("nfdc face destroy ether://[");
-    char szFormat[] = "%02X:%02X:%02X:%02X:%02X:%02X"; 
-	char szMac[32] = {0};
-	sprintf(szMac, szFormat, macAddr[0], macAddr[1], macAddr[2], macAddr[3], macAddr[4], macAddr[5]);
-	cmd.append(std::string(szMac));
-    cmd.append("]");
-
-    system(cmd.c_str());
-}
-
 int main(){
    getRunningInterface();
 	if(interfaceStore.empty()){
@@ -119,18 +109,13 @@ int main(){
 		printf("%2x\n", item.second[5]);
 	}
 
-    std::map<std::string, std::unique_ptr<Server>> serverStore;
-	std::vector<std::thread> serverTheads;
+    Server server(interfaceStore);
+    std::thread serverThread(&Server::run, &server);
 
-	{
+    {
 		std::vector<std::unique_ptr<Client>> clients;
 		std::vector<std::thread> clientTheads;
 		for(auto &item : interfaceStore){
-			auto server = std::make_unique<Server>(item.first, item.second);
-			std::thread serverThread(&Server::run, server.get());
-			serverStore.insert({item.first, std::move(server)});
-			serverTheads.push_back(std::move(serverThread));
-
 			auto client = std::make_unique<Client>(item.first, item.second);
 			std::thread clientThread(&Client::sendMulticastFrame, client.get());
 			clients.push_back(std::move(client));
@@ -153,49 +138,26 @@ int main(){
 
             auto macAddr = new uint8_t[6];
             getInterfaceMacAddr(interfaceName, macAddr);
-            std::cout << "INFO: The Mac address for " << interfaceName << " is ";
+            std::cout << "------The Mac address for " << interfaceName << " is ";
             for(int i = 0; i < 5; ++ i){
                 printf("%2x:", macAddr[i]);
             }
             printf("%2x\n", macAddr[5]);
 
             interfaceStore.insert({interfaceName, macAddr});
-
-            auto server = std::make_unique<Server>(interfaceName, macAddr);
-            std::thread serverThread(&Server::run, server.get());
-            serverStore.insert({interfaceName, std::move(server)});
-            serverTheads.push_back(std::move(serverThread));
-
-            auto client = std::make_unique<Client>(interfaceName, macAddr);
-            std::thread clientThread(&Client::sendMulticastFrame, client.get());
-            clientThread.join();
+            server.addInterface(interfaceName, macAddr);
         }
         else if(ret == -1){
+            std::cout << "INFO: The interface " << interfaceName << " stop" << std::endl;
+
             auto iter_interface = interfaceStore.find(interfaceName);
             interfaceStore.erase(iter_interface);
 
-            auto iter = serverStore.find(interfaceName);
-            if(iter == serverStore.end()){
-                std::cerr << "ERROR: Can't find server from serverStore" << std::endl;
-                exit(1);
-            }
-
-            
-            for(auto &item : iter->second->m_addrStore){
-                destroyFace(item); // 删除face
-            }
-
-            iter->second->stop();
-            iter->second = nullptr;
-            serverStore.erase(iter);
+            server.removeInterface(interfaceName);
         }
     }
 
-    for(auto &serverThead : serverTheads){
-        if (serverThead.joinable()){
-            serverThead.join();
-        }
-    }
+    serverThread.join();
 
     return 0;
 }

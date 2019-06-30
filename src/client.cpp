@@ -22,19 +22,21 @@ void Client::sendMulticastFrame(){
 
     int ret = sendFrame(dstAddr, "");
     if(ret < 0){
-        std::cerr << "ERROR: Client for interface " << m_interface << " failed to send multicast frame" << std::endl;
+        std::cerr << "ERROR: Client for " << m_interface << " failed to send multicast frame" << std::endl;
     }
-
-    std::cout << "INFO: Client for interface " << m_interface << " sent mulicast frame to inform other route" << std::endl;
+    else{
+        std::cout << "INFO: Client for " << m_interface << " sent a mulicast frame" << std::endl;
+    }
 }
 
 void Client::sendAckFrame(const u_int8_t * destAddr){
     int ret = sendFrame(destAddr, "");
     if(ret < 0){
-        std::cerr << "ERROR: Client for interface " << m_interface << " failed to send ACK(unicast) frame" << std::endl;
+        std::cerr << "ERROR: Client for " << m_interface << " failed to send a ACK(unicast) frame" << std::endl;
     }
-
-    std::cout << "INFO: Client for interface " << m_interface << " sent ACK frame" << std::endl;
+    else{
+        std::cout << "INFO: Client for " << m_interface << " sent ACK frame" << std::endl;
+    }    
 }
 
 int Client::sendFrame(const u_int8_t * destAddr, const std::string & content){
@@ -74,10 +76,9 @@ int Client::sendFrame(const u_int8_t * destAddr, const std::string & content){
         frameSize = ETH_ZLEN;
     }
     
-
     int sd = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_IP));
     if(sd < 0){
-        std::cerr << "ERROR: Fail to create frame socket" << std::endl;
+        std::cerr << "ERROR: Client fail to create frame socket" << std::endl;
         return -1;
     }
 
