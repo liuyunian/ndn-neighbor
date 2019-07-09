@@ -12,6 +12,7 @@
 
 #include "server.h"
 #include "client.h"
+#include "log/log.h"
 
 Server::Server(std::map<std::string, const uint8_t *> & interfaceStore)
 {
@@ -31,11 +32,10 @@ Server::~Server(){
 void Server::run(){
     m_socket = socket(PF_PACKET, SOCK_RAW, htons(0x8625));
     if(m_socket < 0){ 
-        std::cerr << "ERROR: Server fail to create socket" << std::endl;
-        exit(1);
+        log_fatal(FAT_SYS, "Server fail to create socket");
     }
 
-    std::cout << "INFO: Server is listening" << std::endl;
+    log_info("Server is listening");
 
     char buffer[ETH_FRAME_LEN];
     int len;
@@ -46,18 +46,8 @@ void Server::run(){
             const uint8_t * destAddr = ether->ether_dhost;
             const uint8_t * srcAddr = ether->ether_shost;
 
-            m_mutex.lock();
-            for(auto & item : m_interfaceStore){
-                if(isEqual(srcAddr, item.second->m_localMacAddr)){
-                    std::cerr << "WARNNING: Server for reveive a frame sent by self" << std::endl;
-                    m_mutex.unlock();
-                    return;
-                }
-            }
-            m_mutex.unlock();
-
             if(isMulticast(destAddr)){
-                std::cout << "INFO: Server reveive a multicast frame" << std::endl;
+                log_info("Server reveive a multicast frame");
 
                 m_mutex.lock();
                 for(auto & item : m_interfaceStore){
@@ -66,7 +56,7 @@ void Server::run(){
                 m_mutex.unlock();
             }
             else if(isSentToMe(destAddr)){
-                std::cout << "INFO: Server reveive a Ack frame" << std::endl;
+                log_info("Server reveive a Ack frame");
 
                 if(!isContainThisNeighbor(srcAddr)){
                     std::string interfaceName(getInterfaceName(destAddr));
@@ -80,7 +70,7 @@ void Server::run(){
                 }
             }
             else{
-                std::cout << "WARNNING: Server reveive a invalid frame" << std::endl;
+                log_err(ERR_NSYS, "Server reveive a invalid frame");
             }
         }
     }
@@ -93,8 +83,7 @@ void Server::addInterface(std::string & interfaceName, const uint8_t * addr){
     interface->m_client = std::move(client);
     m_mutex.lock();
     m_interfaceStore.insert({interfaceName, std::move(interface)});
-    auto iter = m_interfaceStore.find(interfaceName);
-    iter->second->m_client->sendMulticastFrame();
+    m_interfaceStore.at(interfaceName)->m_client->sendMulticastFrame();
     m_mutex.unlock();
 }
 

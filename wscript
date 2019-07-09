@@ -15,7 +15,7 @@ def build(bld):
     bld.program(
         features = 'cxx',
         target='autoFace',
-        source=bld.path.ant_glob(['src/*.cpp']),
-        includes = "./src",
+        source=bld.path.ant_glob(['src/*.cpp', 'src/log/*.cpp']),
+        includes = "./src ./src/log",
         use='PCAP PTHREAD',
     )

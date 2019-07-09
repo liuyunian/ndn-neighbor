@@ -10,6 +10,7 @@
 #include <sys/ioctl.h>
 
 #include "server.h"
+#include "log/log.h"
 
 std::map<std::string, const uint8_t *> interfaceStore;
 
@@ -17,8 +18,15 @@ static void
 getInterfaceMacAddr(std::string interface, uint8_t * macAddr){
     struct ifreq ifreq;
     int sock = socket(AF_INET, SOCK_STREAM, 0);
+    if(sock < 0){
+        log_fatal(FAT_SYS, "Fail to create socket in getInterfaceMacAddr");
+    }
+
     strncpy(ifreq.ifr_name, interface.c_str(), IFNAMSIZ);
-    ioctl(sock, SIOCGIFHWADDR, &ifreq);
+    int err = ioctl(sock, SIOCGIFHWADDR, &ifreq);
+    if(err){
+        log_fatal(FAT_SYS, "Fail to get Mac Addr by ioctl");
+    }
 
     for(int i = 0; i < 6; ++ i){
         macAddr[i] = static_cast<uint8_t>(ifreq.ifr_hwaddr.sa_data[i]);
@@ -32,8 +40,7 @@ getRunningInterface(){
 
 	int ret = pcap_findalldevs(&interfaces, errbuf);
     if(ret < 0){
-        std::cerr << "ERROR: Pacp fail to find interfaces: " << errbuf << std::endl;
-		exit(1);
+        log_fatal(FAT_NSYS, "Pacp fail to find interfaces: %s", errbuf);
     }
 
 	pcap_if_t * interface;
@@ -57,7 +64,7 @@ listenChangeForInterface(std::string & interfaceName){
 
 	int ret = pcap_findalldevs(&interfaces, errbuf);
     if(ret < 0){
-        std::cerr << "WARRNING: Pacp fail to find interfaces: " << errbuf << std::endl;
+        log_err(ERR_NSYS, "Pacp fail to find interfaces: %s", errbuf);
 		return 2;
     }
 
@@ -95,18 +102,22 @@ listenChangeForInterface(std::string & interfaceName){
 int main(){
    getRunningInterface();
 	if(interfaceStore.empty()){
-		std::cout << "INFO: Waitting for connect to other route" << std::endl;
+        log_info("Waitting for connect to other router");
 		while(interfaceStore.empty()){
 			getRunningInterface();
 		}
 	}
-	std::cout << "INFO: Successfully get running network interface information" << std::endl;
-	for(auto &item : interfaceStore){
-		std::cout << "------The Mac address for " << item.first << " is ";
-		for(int i = 0; i < 5; ++ i){
-			printf("%2x:", item.second[i]);
-		}
-		printf("%2x\n", item.second[5]);
+
+    log_info("Successfully get running network interface information");
+	for(auto & interface : interfaceStore){
+        log_info("------The Mac address for %s is %2x:%2x:%2x:%2x:%2x:%2x", 
+                interface.first.c_str(),
+                interface.second[0],
+                interface.second[1],
+                interface.second[2],
+                interface.second[3],
+                interface.second[4],
+                interface.second[5]);
 	}
 
     Server server(interfaceStore);
@@ -134,21 +145,24 @@ int main(){
         int ret = listenChangeForInterface(interfaceName);
 
         if(ret == 1){
-            std::cout << "INFO: The interface " << interfaceName << " is running" << std::endl;
+            log_info("The interface %s is running", interfaceName.c_str());
 
             auto macAddr = new uint8_t[6];
             getInterfaceMacAddr(interfaceName, macAddr);
-            std::cout << "------The Mac address for " << interfaceName << " is ";
-            for(int i = 0; i < 5; ++ i){
-                printf("%2x:", macAddr[i]);
-            }
-            printf("%2x\n", macAddr[5]);
+            log_info("------The Mac address for %s is %2x:%2x:%2x:%2x:%2x:%2x", 
+                    interfaceName.c_str(),
+                    macAddr[0],
+                    macAddr[1],
+                    macAddr[2],
+                    macAddr[3],
+                    macAddr[4],
+                    macAddr[5]);
 
             interfaceStore.insert({interfaceName, macAddr});
             server.addInterface(interfaceName, macAddr);
         }
         else if(ret == -1){
-            std::cout << "INFO: The interface " << interfaceName << " stop" << std::endl;
+            log_info("The interface %s stop", interfaceName.c_str());
 
             auto iter_interface = interfaceStore.find(interfaceName);
             interfaceStore.erase(iter_interface);
