@@ -4,9 +4,8 @@
 #include <string.h> // strlen strcat
 #include <stdlib.h> // exit abort
 
-#include "log.h"
-
-#define LINE_SZ 4096
+#include "macro.h"
+#include "util.h"
 
 static int show_level = 0;
 
@@ -71,7 +70,7 @@ void log_debug(const char * fmt, ...){
 static void 
 err_doit(int log_level, int errno_flag, const char * fmt, va_list ap){
     int errno_save, buf_len;
-    char buf[LINE_SZ + 1] = {0};
+    char buf[LOG_LINE_SZ + 1] = {0};
 
     errno_save = errno;
 
@@ -89,14 +88,14 @@ err_doit(int log_level, int errno_flag, const char * fmt, va_list ap){
     buf_len = strlen(buf);
 
 #ifdef HAVE_VSNPRINTF
-    vsnprintf(buf + buf_len, LINE_SZ - buf_len, fmt, ap);
+    vsnprintf(buf + buf_len, LOG_LINE_SZ - buf_len, fmt, ap);
 #else
     vsprintf(buf + buf_len, fmt, ap);
 #endif
 
     buf_len = strlen(buf);
     if(errno_flag){
-        snprintf(buf + buf_len, LINE_SZ - buf_len, ": %s", strerror(errno_save));
+        snprintf(buf + buf_len, LOG_LINE_SZ - buf_len, ": %s", strerror(errno_save));
     }
     strcat(buf, "\n");
 
@@ -110,7 +109,7 @@ err_doit(int log_level, int errno_flag, const char * fmt, va_list ap){
 static void
 info_doit(int log_level, const char * fmt, va_list ap){
     int buf_len;
-    char buf[LINE_SZ + 1] = {0};
+    char buf[LOG_LINE_SZ + 1] = {0};
 
     switch (log_level){
         case LOG_WARN:
@@ -128,7 +127,7 @@ info_doit(int log_level, const char * fmt, va_list ap){
     buf_len = strlen(buf);
 
 #ifdef HAVE_VSNPRINTF
-    vsnprintf(buf + buf_len, LINE_SZ - buf_len, fmt, ap);
+    vsnprintf(buf + buf_len, LOG_LINE_SZ - buf_len, fmt, ap);
 #else
     vsprintf(buf + buf_len, fmt, ap);
 #endif
